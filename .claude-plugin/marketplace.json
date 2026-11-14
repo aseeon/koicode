@@ -1,6 +1,9 @@
 {
   "name": "koicode",
-  "owner": { "name": "koicode" },
+  "description": "Animated koi backdrops for the Claude Code desktop app.",
+  "owner": {
+    "name": "aseeon"
+  },
   "plugins": [
     {
       "name": "koicode",
