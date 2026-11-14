@@ -1,6 +1,6 @@
 // Koi Blue: kohaku swimming over a floor of blue square tiles.
 // The koi use the Koi Pond engine (see koi-pond.ts) with a smooth look and fine columns. Each koi casts a
-// shadow on the tiles: a copy of its group, flooded dark and shifted.
+// shadow, a copy of its group flooded dark and shifted, drawn just before it so it falls on the tiles and the koi below.
 
 import { type Koi, type Palette, n, school } from './koi-pond.ts'
 
@@ -63,12 +63,12 @@ function floor(): string {
 export function koiBlueSvg(): string {
   const { defs, fish, style } = school(BLUE_KOI, PAL)
   const art = `<radialGradient id="vg" r=".75"><stop offset=".55" stop-color="#071636" stop-opacity="0"/><stop offset="1" stop-color="#071636" stop-opacity=".55"/></radialGradient>
-<filter id="sh"><feFlood flood-color="#0b1c45" flood-opacity=".5"/><feComposite in2="SourceGraphic" operator="in"/></filter>`
-  const shadows = fish.map((_, i) => `<use href="#f${i}" transform="translate(30 40)" filter="url(#sh)"/>`).join('')
+<filter id="sh" color-interpolation-filters="sRGB"><feFlood flood-color="#0b1c45" flood-opacity=".7"/><feComposite in2="SourceGraphic" operator="in"/></filter>`
+  const shadow = (i: number) => `<use href="#f${i}" transform="translate(30 40)" filter="url(#sh)"/>`
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>${style}</style><defs>${floor()}${art}${defs}</defs>
-<rect x="-400" y="-400" width="2400" height="1800" fill="url(#tl)"/>${shadows}
-${fish.join('\n')}
+<rect x="-400" y="-400" width="2400" height="1800" fill="url(#tl)"/>
+${fish.map((f, i) => shadow(i) + f).join('\n')}
 <rect x="-400" y="-400" width="2400" height="1800" fill="url(#vg)"/>
 </svg>`
 }
