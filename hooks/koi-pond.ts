@@ -337,7 +337,7 @@ export function koiPondSvg(): string {
   const shadow = (i: number) => `<use href="#f${i}" transform="translate(14 20)" filter="url(#sh)"/>`
 
   // No ground of its own: the app's background shows through between the fish.
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>${style}</style><defs>${defs}<filter id="sh"><feFlood flood-color="#191919"/><feComposite in2="SourceGraphic" operator="in"/></filter></defs>
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>${style}</style><defs>${defs}<filter id="sh" color-interpolation-filters="sRGB"><feFlood flood-color="#191919" flood-opacity=".7"/><feComposite in2="SourceGraphic" operator="in"/></filter></defs>
 ${fish.map((f, i) => shadow(i) + f).join('\n')}
 </svg>`
 }
