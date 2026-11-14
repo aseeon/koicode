@@ -1,6 +1,6 @@
 {
   "name": "koicode",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Animated mosaic koi swimming behind the chat in the Claude Code desktop app. /koicode shows a card to apply the theme or turn it off.",
   "author": {
     "name": "aseeon"
