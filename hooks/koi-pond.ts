@@ -21,7 +21,6 @@ export type Point = [number, number]
 // The app's dark background, which shows through the scene: see-through tiles blend toward it.
 const APP_BG = '#262624'
 const FIN = '#3d3c39'
-const FIN_DOT = '#5d5b55'
 const EYE = '#121211'
 const WHITE = '#bdbab2'
 const ORANGE = '#d98a35'
@@ -72,30 +71,17 @@ function toBg(hex: string, k: number): string {
  */
 function tiles(cell: number) {
   const fills = new Map<string, string>()
-  const marks = new Map<string, string>()
   // A hair over a cell, so neighbors overlap and no seam shows between them.
   const s = cell + 0.4
   const back = cell
-  const q = Math.max(1, Math.round(cell * 0.18))
   return {
-    add(x: number, y: number, color: string, opacity: number, mark: number, markColor: string): void {
+    add(x: number, y: number, color: string, opacity: number): void {
       const fill = opacity < 1 ? toBg(color, 1 - opacity) : color
       fills.set(fill, (fills.get(fill) ?? '') + `M${n(x - s / 2 - back)} ${n(y - s / 2)}h${n(s + back)}v${n(s)}h-${n(s + back)}z`)
-      // A faint mark inside most tiles: texture like the glyphs of a terminal mosaic, never text.
-      // It sits in the middle of the part of the tile that the column in front leaves visible.
-      if (mark < 0.8) {
-        const mx = x - back
-        const w = 2 * q
-        const at = `M${mx - q} ${y - q}`
-        const m = mark < 0.25 ? `M${mx - q} ${y + q}l${w} -${w}` : mark < 0.45 ? `${at}l${w} ${w}` : mark < 0.6 ? `${at}l${w} ${w}m0 -${w}l-${w} ${w}` : `M${mx - 1} ${y - 1}h2v2h-2z`
-        const ink = opacity < 1 ? toBg(markColor, 1 - opacity) : markColor
-        marks.set(ink, (marks.get(ink) ?? '') + m)
-      }
     },
     svg(): string {
       let out = ''
       for (const [color, d] of fills) out += `<path d="${d}" fill="${color}"/>`
-      for (const [color, d] of marks) out += `<path class="m" d="${d}" stroke="${color}"/>`
       return out
     },
   }
@@ -230,7 +216,7 @@ function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string 
         const color = isEye ? EYE : colorAt(k, t, half === 0 ? 0 : r / half)
         const opacity = isEye ? 1 : cover < 0.75 ? 0.45 : cover < 1.1 ? 0.8 : 1
         const shade = hash(seed + col, r + 9) * 0.1
-        cells.add(0, r * c, dark(color, shade), opacity, isEye ? 1 : hash(seed * 3 + col, r), dark(color, 0.32))
+        cells.add(0, r * c, dark(color, shade), opacity)
         if (isEye) over += `<rect x="${n(-c * 0.15)}" y="${n(r * c - c * 0.15)}" width="${n(c * 0.3)}" height="${n(c * 0.3)}" fill="#d8d4ca"/>`
       }
     } else {
@@ -241,7 +227,7 @@ function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string 
       for (let r = -Math.ceil(half); r <= Math.ceil(half); r += 1) {
         const cover = half + 0.5 - Math.abs(r)
         if (cover < 0.3 || Math.abs(r) < notch) continue
-        cells.add(0, r * c, FIN, Math.round(Math.min(1, cover) * (0.9 - 0.35 * u) * 10) / 10, hash(seed * 5 + col, r) * 0.5 + 0.6, FIN_DOT)
+        cells.add(0, r * c, FIN, Math.round(Math.min(1, cover) * (0.9 - 0.35 * u) * 10) / 10)
       }
     }
     columns.push(`<g>${ride(col * c)}<g class="s" ${sway(col)}>${cells.svg()}${over}</g></g>`)
@@ -264,7 +250,7 @@ function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string 
         const to = from + Math.max(1, Math.round((size - o) * 0.7) + 1)
         for (let b = from; b <= to; b += 1) {
           const edge = o === size || b === to
-          fin.add(-b * c, side * o * c, FIN, edge ? 0.55 : 0.88, hash(seed + salt + side, o * 7 + b) * 0.5 + 0.6, FIN_DOT)
+          fin.add(-b * c, side * o * c, FIN, edge ? 0.55 : 0.88)
         }
       }
       out += `<g transform="translate(0 ${n(side * root * c)})"><g>${swing(10 * side, k.beat * 1.7, k.beat * (side > 0 ? 0.2 : 1.0) + salt * 0.1)}${roots}${fin.svg()}</g></g>`
@@ -323,7 +309,7 @@ export function koiPondSvg(): string {
   const paths = koiPaths()
   const all = KOI.map((k, i) => koi(k, i, paths[i]!))
   const beats = KOI.map((k, i) => `.f${i} .s{animation-duration:${n(k.beat / 2)}s}`).join('')
-  const style = `.m{fill:none;stroke-width:.9;stroke-opacity:.6}.s{animation:sway 1s ease-in-out infinite alternate}${beats}
+  const style = `.s{animation:sway 1s ease-in-out infinite alternate}${beats}
 @keyframes sway{from{transform:translateY(var(--a))}to{transform:translateY(calc(-1 * var(--a)))}}
 @media (prefers-reduced-motion: reduce){.s{animation:none}}`
 
