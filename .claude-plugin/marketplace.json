@@ -1,0 +1,11 @@
+{
+  "name": "koicode",
+  "owner": { "name": "koicode" },
+  "plugins": [
+    {
+      "name": "koicode",
+      "source": "./",
+      "description": "Animated mosaic koi swimming behind the chat in the Claude Code desktop app."
+    }
+  ]
+}
