@@ -332,13 +332,9 @@ export function school(list: Koi[], pal: Palette): { defs: string; fish: string[
 
 export function koiPondSvg(): string {
   const { defs, fish, style } = school(KOI, POND)
-  // Each koi casts a shadow only on the koi below it: mask m<i> is the shape of every koi drawn before koi i.
-  const masks = fish.slice(1).map((_, j) =>
-    `<mask id="m${j + 1}" mask-type="alpha" maskUnits="userSpaceOnUse" x="-400" y="-400" width="2400" height="1800">${fish.slice(0, j + 1).map((_, i) => `<use href="#f${i}"/>`).join('')}</mask>`).join('')
-  const shadow = (i: number) => i === 0 ? '' : `<g mask="url(#m${i})"><use href="#f${i}" transform="translate(14 20)" filter="url(#sh)"/></g>`
 
   // No ground of its own: the app's background shows through between the fish.
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>${style}</style><defs>${defs}${masks}<filter id="sh"><feFlood flood-color="#0c0c0b" flood-opacity=".45"/><feComposite in2="SourceGraphic" operator="in"/></filter></defs>
-${fish.map((f, i) => shadow(i) + f).join('\n')}
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>${style}</style><defs>${defs}</defs>
+${fish.join('\n')}
 </svg>`
 }
