@@ -15,7 +15,10 @@ export type Koi = {
   speed: number // px per second along the path
   start: number // 0..1, where on the path the head is at time zero
   beat: number // seconds per tail beat
+  wave?: number // sway size multiplier, 1 if absent
 }
+/** The colors a scene's koi are drawn with. `bg` is what shows behind them: faded tiles blend toward it. */
+export type Palette = { bg: string; fin: string; eye: string; glint: string; shade: number; scallop: number }
 export type Point = [number, number]
 
 // The app's dark background, which shows through the scene: see-through tiles blend toward it.
@@ -26,13 +29,14 @@ const WHITE = '#bdbab2'
 const ORANGE = '#d98a35'
 const RED = '#c4521f'
 const INK = '#2a2927'
+const POND: Palette = { bg: APP_BG, fin: FIN, eye: EYE, glint: '#d8d4ca', shade: 0.1, scallop: 0 }
 
 function hash(seed: number, i: number): number {
   const x = Math.sin(seed * 127.1 + i * 311.7) * 43758.5453
   return x - Math.floor(x)
 }
 
-const n = (x: number): string => String(Math.round(x * 10) / 10)
+export const n = (x: number): string => String(Math.round(x * 10) / 10)
 
 /** A hex color darkened by k. */
 function dark(hex: string, k: number): string {
@@ -47,17 +51,19 @@ function halfAt(t: number, w: number): number {
   return w * s
 }
 
-function colorAt(k: Koi, t: number, v: number): string {
+/** The patch color at t, v. With scallop above 0 a patch edge has rounded bumps, like the cloud edges of a kohaku. */
+function colorAt(k: Koi, t: number, v: number, scallop: number): string {
   for (const p of k.patches) {
-    if (((t - p.t) / p.rt) ** 2 + ((v - p.v) / p.rv) ** 2 <= 1) return p.color
+    const [a, b] = [(t - p.t) / p.rt, (v - p.v) / p.rv]
+    if (a * a + b * b <= (1 + scallop * Math.sin(9 * Math.atan2(b, a) + p.t * 50)) ** 2) return p.color
   }
   return k.base
 }
 
-/** A hex color blended toward the app's dark background by k: a see-through look that stays solid. */
-function toBg(hex: string, k: number): string {
+/** A hex color blended toward the background bg by k: a see-through look that stays solid. */
+function toBg(hex: string, k: number, bg: string): string {
   const a = parseInt(hex.slice(1), 16)
-  const b = parseInt(APP_BG.slice(1), 16)
+  const b = parseInt(bg.slice(1), 16)
   const ch = (s: number) => Math.round(((a >> s) & 255) * (1 - k) + ((b >> s) & 255) * k)
   return `#${((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1)}`
 }
@@ -69,19 +75,27 @@ function toBg(hex: string, k: number): string {
  * there instead of leaving a hole. Opacity becomes a blend toward the background, since overlapping see-through tiles
  * would show darker bands.
  */
-function tiles(cell: number) {
-  const fills = new Map<string, string>()
+function tiles(cell: number, pal: Palette) {
+  // Per fill, runs of touching tiles down one column [x, first y, last y]: a run is drawn as one rectangle.
+  const fills = new Map<string, [number, number, number][]>()
   // A hair over a cell, so neighbors overlap and no seam shows between them.
   const s = cell + 0.4
   const back = cell
   return {
     add(x: number, y: number, color: string, opacity: number): void {
-      const fill = opacity < 1 ? toBg(color, 1 - opacity) : color
-      fills.set(fill, (fills.get(fill) ?? '') + `M${n(x - s / 2 - back)} ${n(y - s / 2)}h${n(s + back)}v${n(s)}h-${n(s + back)}z`)
+      const fill = opacity < 1 ? toBg(color, 1 - opacity, pal.bg) : color
+      const runs = fills.get(fill) ?? []
+      const last = runs.at(-1)
+      if (last !== undefined && last[0] === x && last[2] === y - cell) last[2] = y
+      else runs.push([x, y, y])
+      fills.set(fill, runs)
     },
     svg(): string {
       let out = ''
-      for (const [color, d] of fills) out += `<path d="${d}" fill="${color}"/>`
+      for (const [color, runs] of fills) {
+        const d = runs.map(([x, top, end]) => `M${n(x - s / 2 - back)} ${n(top - s / 2)}h${n(s + back)}v${n(end - top + s)}h-${n(s + back)}z`).join('')
+        out += `<path d="${d}" fill="${color}"/>`
+      }
       return out
     },
   }
@@ -172,8 +186,8 @@ export function turnRadius(k: Koi): number {
 }
 
 /** Each koi's path, eased to its turn radius. */
-export function koiPaths(): Point[][] {
-  return KOI.map(k => gentle(k.path, turnRadius(k)))
+export function koiPaths(list: Koi[] = KOI): Point[][] {
+  return list.map(k => gentle(k.path, turnRadius(k)))
 }
 
 function swing(amp: number, beat: number, lag: number): string {
@@ -181,7 +195,7 @@ function swing(amp: number, beat: number, lag: number): string {
 }
 
 /** One koi: a group per column, each riding the path at its own distance behind the snout. */
-function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string } {
+function koi(k: Koi, index: number, path: Point[], pal: Palette): { defs: string; svg: string } {
   const seed = 17 + index * 31
   const c = k.cell
   const id = `k${index}`
@@ -197,12 +211,12 @@ function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string 
   const sway = (col: number) => {
     const t = col / total
     const amp = col < k.body ? c * (0.08 + 0.55 * t * t) : c * (0.45 + 0.9 * ((col - k.body) / tail))
-    return `style="--a:${n(amp)}px;animation-delay:${n(-2 * k.beat + (col / total) * k.beat * 0.9)}s"`
+    return `style="--a:${n(amp * (k.wave ?? 1))}px;animation-delay:${n(-2 * k.beat + (col / total) * k.beat * 0.9)}s"`
   }
 
   const columns: string[] = []
   for (let col = total - 1; col >= 0; col -= 1) {
-    const cells = tiles(c)
+    const cells = tiles(c, pal)
     let over = ''
     if (col < k.body) {
       const t = col / (k.body - 1)
@@ -212,12 +226,12 @@ function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string 
         // How much of this tile the outline covers: edge tiles are drawn fainter, like the grey rims in a mosaic.
         const cover = half + 0.5 - Math.abs(r)
         if (cover < 0.3) continue
-        const isEye = col === 2 && Math.abs(r) === Math.max(1, Math.round(half) - 1)
-        const color = isEye ? EYE : colorAt(k, t, half === 0 ? 0 : r / half)
+        const isEye = col === Math.round(k.body * 0.09) && Math.abs(r) === Math.max(1, Math.round(half) - 1)
+        const color = isEye ? pal.eye : colorAt(k, t, half === 0 ? 0 : r / half, pal.scallop)
         const opacity = isEye ? 1 : cover < 0.75 ? 0.45 : cover < 1.1 ? 0.8 : 1
-        const shade = hash(seed + col, r + 9) * 0.1
+        const shade = hash(seed + col, r + 9) * pal.shade
         cells.add(0, r * c, dark(color, shade), opacity)
-        if (isEye) over += `<rect x="${n(-c * 0.15)}" y="${n(r * c - c * 0.15)}" width="${n(c * 0.3)}" height="${n(c * 0.3)}" fill="#d8d4ca"/>`
+        if (isEye) over += `<rect x="${n(-c * 0.15)}" y="${n(r * c - c * 0.15)}" width="${n(c * 0.3)}" height="${n(c * 0.3)}" fill="${pal.glint}"/>`
       }
     } else {
       // The caudal fin: a dark fan that widens and forks into two lobes.
@@ -227,7 +241,7 @@ function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string 
       for (let r = -Math.ceil(half); r <= Math.ceil(half); r += 1) {
         const cover = half + 0.5 - Math.abs(r)
         if (cover < 0.3 || Math.abs(r) < notch) continue
-        cells.add(0, r * c, FIN, Math.round(Math.min(1, cover) * (0.9 - 0.35 * u) * 10) / 10)
+        cells.add(0, r * c, pal.fin, Math.round(Math.min(1, cover) * (0.9 - 0.35 * u) * 10) / 10)
       }
     }
     columns.push(`<g>${ride(col * c)}<g class="s" ${sway(col)}>${cells.svg()}${over}</g></g>`)
@@ -239,18 +253,18 @@ function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string 
     const root = halfAt(t, k.width) - 0.5
     let out = ''
     for (const side of [1, -1]) {
-      const fin = tiles(c)
+      const fin = tiles(c, pal)
       // The root: one solid block from the spine out to the first row of tiles, under the body tiles (fins are drawn
       // first). However the fin flaps or the body bends, the joint stays covered, so no gap opens along it.
       const reach = Math.max(1, Math.round((size - 1) * 0.7) + 1) + 2
       const y0 = side > 0 ? -root * c : -c
-      const roots = `<path d="M${n(0.5 * c)} ${n(y0)}h-${n(reach * c)}v${n(root * c + c)}h${n(reach * c)}z" fill="${toBg(FIN, 0.12)}"/>`
+      const roots = `<path d="M${n(0.5 * c)} ${n(y0)}h-${n(reach * c)}v${n(root * c + c)}h${n(reach * c)}z" fill="${toBg(pal.fin, 0.12, pal.bg)}"/>`
       for (let o = 1; o <= size; o += 1) {
         const from = Math.floor(o * 0.6)
         const to = from + Math.max(1, Math.round((size - o) * 0.7) + 1)
         for (let b = from; b <= to; b += 1) {
           const edge = o === size || b === to
-          fin.add(-b * c, side * o * c, FIN, edge ? 0.55 : 0.88)
+          fin.add(-b * c, side * o * c, pal.fin, edge ? 0.55 : 0.88)
         }
       }
       out += `<g transform="translate(0 ${n(side * root * c)})"><g>${swing(10 * side, k.beat * 1.7, k.beat * (side > 0 ? 0.2 : 1.0) + salt * 0.1)}${roots}${fin.svg()}</g></g>`
@@ -262,7 +276,7 @@ function koi(k: Koi, index: number, path: Point[]): { defs: string; svg: string 
   return {
     defs: `<path id="${id}" d="${d}"/>`,
     // Fins first and the snout last, so the head lies on top of everything behind it.
-    svg: `<g class="f${index}">${fins}${columns.join('')}</g>`,
+    svg: `<g id="f${index}" class="f${index}">${fins}${columns.join('')}</g>`,
   }
 }
 
@@ -305,16 +319,22 @@ export const KOI: Koi[] = [
   },
 ]
 
-export function koiPondSvg(): string {
-  const paths = koiPaths()
-  const all = KOI.map((k, i) => koi(k, i, paths[i]!))
-  const beats = KOI.map((k, i) => `.f${i} .s{animation-duration:${n(k.beat / 2)}s}`).join('')
+/** All koi of a scene: their path defs, each fish's markup (group id f0, f1, ...) and the sway CSS. */
+export function school(list: Koi[], pal: Palette): { defs: string; fish: string[]; style: string } {
+  const paths = koiPaths(list)
+  const all = list.map((k, i) => koi(k, i, paths[i]!, pal))
+  const beats = list.map((k, i) => `.f${i} .s{animation-duration:${n(k.beat / 2)}s}`).join('')
   const style = `.s{animation:sway 1s ease-in-out infinite alternate}${beats}
 @keyframes sway{from{transform:translateY(var(--a))}to{transform:translateY(calc(-1 * var(--a)))}}
 @media (prefers-reduced-motion: reduce){.s{animation:none}}`
+  return { defs: all.map(f => f.defs).join(''), fish: all.map(f => f.svg), style }
+}
+
+export function koiPondSvg(): string {
+  const { defs, fish, style } = school(KOI, POND)
 
   // No ground of its own: the app's background shows through between the fish.
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>${style}</style><defs>${all.map(f => f.defs).join('')}</defs>
-${all.map(f => f.svg).join('\n')}
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>${style}</style><defs>${defs}</defs>
+${fish.join('\n')}
 </svg>`
 }

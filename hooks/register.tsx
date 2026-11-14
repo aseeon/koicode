@@ -1,6 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ThemeBackdropGlass, ThemeSetArgs, Timer } from 'claude-code'
 
+import { koiBlueSvg } from './koi-blue'
 import { koiPondSvg } from './koi-pond'
 import type { KoiChoice } from '../types'
 
@@ -24,6 +25,14 @@ const THEMES: readonly Theme[] = [
     alt: 'Mosaic koi swimming through a dark pond',
     glass: { blur: 10, tint: '#191917', opacity: 0.36 },
     scene: koiPondSvg,
+  },
+  {
+    id: 'koi-blue',
+    title: 'Koi Blue',
+    blurb: 'Kohaku swimming over blue tiles',
+    alt: 'Red and white koi swimming over a floor of blue tiles',
+    glass: { blur: 10, tint: '#0c1a3a', opacity: 0.5 },
+    scene: koiBlueSvg,
   },
 ]
 
